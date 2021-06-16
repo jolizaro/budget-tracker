@@ -8,29 +8,39 @@ fetch("/api/transaction")
   .then(data => {
     // save db data on global variable
     transactions = data;
-    let db;
-    let budgetVersion;
-    const request = indexedDB.open('BudgetDB', budgetVersion || 21);
+
+
+    const request = indexedDB.open('BudgetDB', 21);
     request.onupgradeneeded = function (e) {
       console.log('Upgrade needed in IndexDB');
-    
+      const db = e.target.result;
+
       const { oldVersion } = e;
       const newVersion = e.newVersion || db.version;
-    
+
       console.log(`DB Updated from version ${oldVersion} to ${newVersion}`);
-    
-      db = e.target.result;
-    
-      if (db.objectStoreNames.length === 0) {
-        db.createObjectStore('BudgetStore', { autoIncrement: true });
-      }
+
+
+
+      const budgetDBstore = db.createObjectStore('BudgetStore', { keyPath: "listID"});
+      budgetDBstore.createIndex("statusIndex", "status");
     };
-    request.onsuccess = function(e){
-      db = e.target.result
+    
+    request.onsuccess = function (e) {
+      const db = e.target.result
       console.log(db, "Success")
+      const transaction = db.transaction(['BudgetStore'], "readwrite")
+      const objectStore = transaction.objectStore('BudgetStore')
+      //const statusIndex = objectStore.index("statusIndex")
+      objectStore.clear()
+      transactions.forEach(item => {
+        console.log(item)
+        objectStore.add(item)
+
+      })
     }
-    request.onerror = function(e){
-      console.log(e.target.errorCode)
+    request.onerror = function (e) {
+      console.log(e.target)
     }
 
     populateTotal();
@@ -90,14 +100,14 @@ function populateChart() {
 
   myChart = new Chart(ctx, {
     type: 'line',
-      data: {
-        labels,
-        datasets: [{
-            label: "Total Over Time",
-            fill: true,
-            backgroundColor: "#6666ff",
-            data
-        }]
+    data: {
+      labels,
+      datasets: [{
+        label: "Total Over Time",
+        fill: true,
+        backgroundColor: "#6666ff",
+        data
+      }]
     }
   });
 }
@@ -135,7 +145,7 @@ function sendTransaction(isAdding) {
   populateChart();
   populateTable();
   populateTotal();
-  
+
   // also send to server
   fetch("/api/transaction", {
     method: "POST",
@@ -145,33 +155,33 @@ function sendTransaction(isAdding) {
       "Content-Type": "application/json"
     }
   })
-  .then(response => {    
-    return response.json();
-  })
-  .then(data => {
-    if (data.errors) {
-      errorEl.textContent = "Missing Information";
-    }
-    else {
+    .then(response => {
+      return response.json();
+    })
+    .then(data => {
+      if (data.errors) {
+        errorEl.textContent = "Missing Information";
+      }
+      else {
+        // clear form
+        nameEl.value = "";
+        amountEl.value = "";
+      }
+    })
+    .catch(err => {
+      // fetch failed, so save in indexed db
+      saveRecord(transaction);
+
       // clear form
       nameEl.value = "";
       amountEl.value = "";
-    }
-  })
-  .catch(err => {
-    // fetch failed, so save in indexed db
-    saveRecord(transaction);
-
-    // clear form
-    nameEl.value = "";
-    amountEl.value = "";
-  });
+    });
 }
 
-document.querySelector("#add-btn").onclick = function() {
+document.querySelector("#add-btn").onclick = function () {
   sendTransaction(true);
 };
 
-document.querySelector("#sub-btn").onclick = function() {
+document.querySelector("#sub-btn").onclick = function () {
   sendTransaction(false);
 };
