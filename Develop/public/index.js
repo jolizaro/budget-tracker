@@ -22,10 +22,10 @@ fetch("/api/transaction")
 
 
 
-      const budgetDBstore = db.createObjectStore('BudgetStore', { keyPath: "listID"});
+      const budgetDBstore = db.createObjectStore('BudgetStore', { keyPath: "listID" });
       budgetDBstore.createIndex("statusIndex", "status");
     };
-    
+
     request.onsuccess = function (e) {
       const db = e.target.result
       console.log(db, "Success")
@@ -113,69 +113,79 @@ function populateChart() {
 }
 
 function sendTransaction(isAdding) {
-  let nameEl = document.querySelector("#t-name");
-  let amountEl = document.querySelector("#t-amount");
-  let errorEl = document.querySelector(".form .error");
+  
 
-  // validate form
-  if (nameEl.value === "" || amountEl.value === "") {
-    errorEl.textContent = "Missing Information";
-    return;
-  }
-  else {
-    errorEl.textContent = "";
-  }
+    console.log(navigator.onLine)
+    let nameEl = document.querySelector("#t-name");
+    let amountEl = document.querySelector("#t-amount");
+    let errorEl = document.querySelector(".form .error");
 
-  // create record
-  let transaction = {
-    name: nameEl.value,
-    value: amountEl.value,
-    date: new Date().toISOString()
-  };
 
-  // if subtracting funds, convert amount to negative number
-  if (!isAdding) {
-    transaction.value *= -1;
-  }
-
-  // add to beginning of current array of data
-  transactions.unshift(transaction);
-
-  // re-run logic to populate ui with new record
-  populateChart();
-  populateTable();
-  populateTotal();
-
-  // also send to server
-  fetch("/api/transaction", {
-    method: "POST",
-    body: JSON.stringify(transaction),
-    headers: {
-      Accept: "application/json, text/plain, */*",
-      "Content-Type": "application/json"
+    // validate form
+    if (nameEl.value === "" || amountEl.value === "") {
+      errorEl.textContent = "Missing Information";
+      return;
     }
-  })
-    .then(response => {
-      return response.json();
-    })
-    .then(data => {
-      if (data.errors) {
-        errorEl.textContent = "Missing Information";
+    else {
+      errorEl.textContent = "";
+    }
+
+    // create record
+    let transaction = {
+      name: nameEl.value,
+      value: amountEl.value,
+      date: new Date().toISOString()
+    };
+
+    // if subtracting funds, convert amount to negative number
+    if (!isAdding) {
+      transaction.value *= -1;
+    }
+
+    // add to beginning of current array of data
+    transactions.unshift(transaction);
+
+    // re-run logic to populate ui with new record
+    populateChart();
+    populateTable();
+    populateTotal();
+
+    // also send to server
+    if (!navigator.onLine) {
+      console.log('were offline!')
+      console.log(transaction)
+    } else {
+  
+    fetch("/api/transaction", {
+      method: "POST",
+      body: JSON.stringify(transaction),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/json"
       }
-      else {
+    })
+      .then(response => {
+        return response.json();
+      })
+      .then(data => {
+        if (data.errors) {
+          errorEl.textContent = "Missing Information";
+        }
+        else {
+          // clear form
+          nameEl.value = "";
+          amountEl.value = "";
+        }
+      })
+      .catch(err => {
+        // fetch failed, so save in indexed db
+        saveRecord(transaction);
+
         // clear form
         nameEl.value = "";
         amountEl.value = "";
-      }
-    })
-    .catch(err => {
-      // fetch failed, so save in indexed db
-      saveRecord(transaction);
-
-      // clear form
-      nameEl.value = "";
-      amountEl.value = "";
-    });
+      });
+  }
 }
 
 document.querySelector("#add-btn").onclick = function () {
