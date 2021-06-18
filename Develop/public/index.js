@@ -1,5 +1,40 @@
 let transactions = [];
 let myChart;
+let db;
+const request = indexedDB.open('BudgetDB', 21);
+
+
+request.onupgradeneeded = function (e) {
+  console.log('Upgrade needed in IndexDB');
+
+  const { oldVersion } = e;
+  const newVersion = e.newVersion || db.version;
+
+  console.log(`DB Updated from version ${oldVersion} to ${newVersion}`);
+
+  db = e.target.result;
+  console.log(db)
+ //const transaction = db.transaction(["BudgetStore"], "readwrite");
+
+  if (db.objectStoreNames.length === 0) {
+    db.createObjectStore('BudgetStore', { autoIncrement: true });
+  }
+};
+
+request.onerror = function (e) {
+  console.log(`DOESNT WORK: ${e.target.errorCode}`)
+}
+
+request.onsuccess = function (e) {
+  console.log('success');
+  db = e.target.result;
+
+  // Check if app is online before reading from db
+  if (navigator.onLine) {
+    console.log('Backend online! 🗄️');
+    sendBulkTrans();
+  }
+};
 
 fetch("/api/transaction")
   .then(response => {
@@ -10,26 +45,9 @@ fetch("/api/transaction")
     transactions = data;
 
 
-    const request = indexedDB.open('BudgetDB', 21);
-    request.onupgradeneeded = function (e) {
-      console.log('Upgrade needed in IndexDB');
-      const db = e.target.result;
-
-      const { oldVersion } = e;
-      const newVersion = e.newVersion || db.version;
-
-      console.log(`DB Updated from version ${oldVersion} to ${newVersion}`);
-
-
-
-      const budgetDBstore = db.createObjectStore('BudgetStore', { keyPath: "listID" });
-      budgetDBstore.createIndex("statusIndex", "status");
-    };
-
     request.onsuccess = function (e) {
-      const db = e.target.result
-      console.log(db, "Success")
-      const transaction = db.transaction(['BudgetStore'], "readwrite")
+
+     
       const objectStore = transaction.objectStore('BudgetStore')
       //const statusIndex = objectStore.index("statusIndex")
       objectStore.clear()
@@ -112,50 +130,57 @@ function populateChart() {
   });
 }
 
+function sendBulkTrans() {
+  console.log("Send bulk trans")
+  console.log(db)
+  let transaction = db.transaction(['BudgetStore'], 'readwrite')
+  let myStore = transaction.objectStore('BudgetStore')
+  console.log(myStore)
+}
 function sendTransaction(isAdding) {
-  
-
-    console.log(navigator.onLine)
-    let nameEl = document.querySelector("#t-name");
-    let amountEl = document.querySelector("#t-amount");
-    let errorEl = document.querySelector(".form .error");
 
 
-    // validate form
-    if (nameEl.value === "" || amountEl.value === "") {
-      errorEl.textContent = "Missing Information";
-      return;
-    }
-    else {
-      errorEl.textContent = "";
-    }
+  console.log(navigator.onLine)
+  let nameEl = document.querySelector("#t-name");
+  let amountEl = document.querySelector("#t-amount");
+  let errorEl = document.querySelector(".form .error");
 
-    // create record
-    let transaction = {
-      name: nameEl.value,
-      value: amountEl.value,
-      date: new Date().toISOString()
-    };
 
-    // if subtracting funds, convert amount to negative number
-    if (!isAdding) {
-      transaction.value *= -1;
-    }
+  // validate form
+  if (nameEl.value === "" || amountEl.value === "") {
+    errorEl.textContent = "Missing Information";
+    return;
+  }
+  else {
+    errorEl.textContent = "";
+  }
 
-    // add to beginning of current array of data
-    transactions.unshift(transaction);
+  // create record
+  let transaction = {
+    name: nameEl.value,
+    value: amountEl.value,
+    date: new Date().toISOString()
+  };
 
-    // re-run logic to populate ui with new record
-    populateChart();
-    populateTable();
-    populateTotal();
+  // if subtracting funds, convert amount to negative number
+  if (!isAdding) {
+    transaction.value *= -1;
+  }
 
-    // also send to server
-    if (!navigator.onLine) {
-      console.log('were offline!')
-      console.log(transaction)
-    } else {
-  
+  // add to beginning of current array of data
+  transactions.unshift(transaction);
+
+  // re-run logic to populate ui with new record
+  populateChart();
+  populateTable();
+  populateTotal();
+
+  // also send to server
+  if (!navigator.onLine) {
+    console.log('were offline!')
+    console.log(transaction)
+  } else {
+
     fetch("/api/transaction", {
       method: "POST",
       body: JSON.stringify(transaction),
@@ -195,3 +220,8 @@ document.querySelector("#add-btn").onclick = function () {
 document.querySelector("#sub-btn").onclick = function () {
   sendTransaction(false);
 };
+
+window.addEventListener("online", () => {
+  console.log("back online")
+  sendBulkTrans()
+})
